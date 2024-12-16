@@ -1,3 +1,5 @@
+# Note: to make it executable app:
+# python3 -m PyInstaller --onefile --windowed --add-data "icons:icons" --add-data "database.db:." main.py
 import sys
 from datetime import datetime
 import sqlite3
@@ -5,16 +7,17 @@ import sqlite3
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QToolBar, \
     QVBoxLayout, QLabel, QWidget, QBoxLayout,QStatusBar,\
-    QGridLayout, QLineEdit, QPushButton, QMainWindow, QDialog, QComboBox
+    QGridLayout, QLineEdit, QPushButton, QMainWindow, QDialog, QComboBox, QMessageBox
 from PyQt6.QtGui import QAction, QIcon
-from django.db.transaction import commit
+from samba.kcc.graph import add_out_edge
+from scipy.sparse import diags
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Student Management System")
-        self.setMinimumSize(800,600)
+        self.setMinimumSize(700,500)
 
         file_menu_item = self.menuBar().addMenu("&File")
         help_menu_item = self.menuBar().addMenu("&Help")
@@ -31,6 +34,8 @@ class MainWindow(QMainWindow):
 
         about_action = QAction("About", self)
         help_menu_item.addAction(about_action)
+        about_action.triggered.connect(self.about)  # if clicked on about, then call about method
+
 
 
         self.table = QTableWidget()
@@ -105,6 +110,24 @@ class MainWindow(QMainWindow):
         dialog = DeleteDialog()
         dialog.exec()
 
+    def about(self):
+        dialog = AboutDialog()
+        dialog.exec()
+
+class AboutDialog(QMessageBox):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("About")
+        content = """
+        This is a simple app which does student registration 
+        interacting with database. 
+        
+        Feel free to use and develope it.
+        Write me: 
+        vakili.hu.it@gmail.com
+        """
+        self.setText(content)
+
 
 class EditDialog(QDialog):
     def __init__(self):
@@ -161,12 +184,43 @@ class EditDialog(QDialog):
         main_window.load_data()
 
 
-
 class DeleteDialog(QDialog):
-    #def __init__(self):
-     #   super.__init__()
-    pass
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Delete Student Data...")
+        self.setFixedWidth(170)
+        self.setFixedHeight(150)
 
+        layout = QGridLayout()
+        confirmation = QLabel("Are you sure you want to delete?")
+        yes = QPushButton("Yes")
+        no = QPushButton("No")
+
+        layout.addWidget(confirmation, 0 , 0, 1, 2)
+        layout.addWidget(yes, 1, 0)
+        layout.addWidget(no, 1, 1 )
+        self.setLayout(layout)
+
+        yes.clicked.connect(self.delete_student)
+
+    def delete_student(self):
+        #Get selected row index and student id
+        index = main_window.table.currentRow()
+        student_id = main_window.table.item(index, 0).text()
+
+        connection = sqlite3.connect("database.db")
+        cursor = connection.cursor()
+        cursor.execute("DELETE from students WHERE id = ?", (student_id, ))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        main_window.load_data() # will access the data and somehow refresh it!
+
+        self.close() # to close yes/no window! the current opening window
+        confirmation_widget = QMessageBox()
+        confirmation_widget.setWindowTitle("Success")
+        confirmation_widget.setText("The Record was deleted successfully!")
+        confirmation_widget.exec()
 
 # to create dialog window. eg: click add student, then opens a dialog window to fill
 class InsertDialog(QDialog):
@@ -250,7 +304,6 @@ class SearchDialog(QDialog):
 
         cursor.close()
         connection.close()
-
 
 app = QApplication(sys.argv)
 main_window = MainWindow()
